@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampoSat — Diagnóstico Satelital</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAPFpHTPLBdxt8Tx_3ybhLjt1HDnIlCzN8&libraries=drawing"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/earthengine/0.1.365/earthengine-api.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0d1b0e;
+      color: white;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f4c2a, #1a6b3c);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .logo span { color: #7dcbf0; }
+
+    #status-pill {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .toolbar {
+      background: #1a2e1c;
+      padding: 10px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #2d4a2f;
+    }
+
+    .toolbar label {
+      font-size: 12px;
+      color: #7a9e87;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .toolbar select, .toolbar button {
+      background: #2d4a2f;
+      border: 1px solid #4db876;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover { background: #4db876; color: #0d1b0e; }
+    .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .toolbar button.active {
+      background: #4db876;
+      color: #0d1b0e;
+      font-weight: 700;
+    }
+
+    #map-container {
+      flex: 1;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    #legend {
+      position: absolute;
+      bottom: 30px;
+      right: 12px;
+      background: rgba(13,27,14,0.9);
+      border: 1px solid #2d4a2f;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 12px;
+      min-width: 160px;
+    }
+
+    #legend h4 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a9e87;
+      margin-bottom: 8px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    #info-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(13,27,14,0.92);
+      border: 1px solid #2d4a2f;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 13px;
+      max-width: 280px;
+      display: none;
+    }
+
+    #info-panel h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #4db876;
+      margin-bottom: 8px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #1a2e1c;
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: #7a9e87; }
+    .stat-value { font-weight: 700; color: #7dcbf0; }
+
+    #sign-in-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(13,27,14,0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 1000;
+    }
+
+    #sign-in-overlay h2 {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    #sign-in-overlay p {
+      font-size: 14px;
+      color: #7a9e87;
+      text-align: center;
+      max-width: 340px;
+    }
+
+    #btn-signin {
+      background: #4db876;
+      color: #0d1b0e;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #btn-signin:hover { background: #6dd494; }
+
+    .spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(77,184,118,0.3);
+      border-top-color: #4db876;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Campo<span>Sat</span> <span style="font-size:13px;font-weight:400;color:#7a9e87">— Diagnóstico Satelital</span></div>
+  <div id="status-pill">Iniciando...</div>
+</header>
+
+<div class="toolbar">
+  <label>Índice:</label>
+  <select id="indice-select">
+    <option value="ndvi">NDVI — Vigor vegetativo</option>
+    <option value="ndwi">NDWI — Humedad hídrica</option>
+    <option value="rgb">RGB — Color natural</option>
+  </select>
+
+  <label>Año:</label>
+  <select id="year-select">
+    <option value="2024">2024</option>
+    <option value="2023">2023</option>
+    <option value="2022">2022</option>
+  </select>
+
+  <button id="btn-draw" onclick="activarDibujo()" disabled>✏️ Dibujar polígono</button>
+  <button id="btn-analizar" onclick="analizarPoligono()" disabled>🔍 Analizar zona</button>
+  <button id="btn-limpiar" onclick="limpiarPoligono()" disabled>🗑️ Limpiar</button>
+  <div class="spinner" id="spinner"></div>
+</div>
+
+<div id="map-container">
+  <div id="map"></div>
+
+  <!-- Sign in overlay -->
+  <div id="sign-in-overlay">
+    <div style="font-size:48px">🛰️</div>
+    <h2>Diagnóstico Satelital</h2>
+    <p>Iniciá sesión con tu cuenta Google que tiene acceso a Earth Engine para visualizar imágenes Sentinel-2 y calcular índices espectrales.</p>
+    <button id="btn-signin" onclick="iniciarSesion()">
+      <span>🔐</span> Iniciar sesión con Google
+    </button>
+  </div>
+
+  <!-- Info panel -->
+  <div id="info-panel">
+    <h3>📊 Análisis de zona</h3>
+    <div id="stats-content"></div>
+    <div style="margin-top:10px;font-size:11px;color:#7a9e87">
+      * Valores promedio dentro del polígono dibujado
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <h4 id="legend-title">NDVI</h4>
+    <div class="legend-row"><div class="legend-color" style="background:#d73027"></div><span>Sin vegetación / agua</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fc8d59"></div><span>Vegetación escasa</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fee08b"></div><span>Vegetación moderada</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#91cf60"></div><span>Vegetación buena</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#1a9850"></div><span>Vegetación densa</span></div>
+  </div>
+</div>
+
+<script>
+const CLIENT_ID = '437810432043-taucgpu2me44aaqc0svqalrkjl56mcbu.apps.googleusercontent.com';
+const PROJECT   = 'proyecto-integrador-ii-494414';
+
+let mapa, drawingManager, poligono = null, eeLayer = null;
+
+// ── AUTH ──────────────────────────────────────────────
+function iniciarSesion() {
+  setStatus('Autenticando...');
+  ee.data.authenticateViaPopup(() => {
+    ee.initialize(null, null, arrancarApp, err => {
+      setStatus('Error: ' + err);
+      alert('Error al inicializar Earth Engine: ' + err);
+    }, null, PROJECT);
+  });
+}
+
+ee.data.authenticateViaOauth(
+  CLIENT_ID,
+  () => {
+    ee.initialize(null, null, arrancarApp, err => {
+      console.error('EE init error:', err);
+      setStatus('Error de inicialización');
+    }, null, PROJECT);
+  },
+  err => {
+    console.log('No autenticado, mostrando botón');
+    setStatus('Requiere autenticación');
+  },
+  ['https://www.googleapis.com/auth/earthengine.readonly'],
+  () => { /* mostrar overlay — ya está visible */ },
+  true
+);
+
+// ── APP ───────────────────────────────────────────────
+function arrancarApp() {
+  document.getElementById('sign-in-overlay').style.display = 'none';
+  setStatus('✅ Conectado a Earth Engine');
+
+  // Inicializar mapa centrado en Córdoba
+  mapa = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: -31.4201, lng: -64.1811 },
+    zoom: 10,
+    mapTypeId: 'satellite',
+    mapTypeControl: true,
+    streetViewControl: false,
+    fullscreenControl: true,
+  });
+
+  // Drawing manager para dibujar polígonos
+  drawingManager = new google.maps.drawing.DrawingManager({
+    drawingMode: null,
+    drawingControl: false,
+    polygonOptions: {
+      fillColor: '#4db876',
+      fillOpacity: 0.2,
+      strokeColor: '#4db876',
+      strokeWeight: 2,
+      editable: true
+    }
+  });
+  drawingManager.setMap(mapa);
+
+  google.maps.event.addListener(drawingManager, 'polygoncomplete', function(poly) {
+    if (poligono) poligono.setMap(null);
+    poligono = poly;
+    drawingManager.setDrawingMode(null);
+    document.getElementById('btn-draw').classList.remove('active');
+    document.getElementById('btn-analizar').disabled = false;
+    document.getElementById('btn-limpiar').disabled = false;
+    setStatus('Polígono listo — hacé clic en Analizar zona');
+  });
+
+  // Cargar capa inicial
+  document.getElementById('btn-draw').disabled = false;
+  cargarCapa();
+
+  // Listeners para cambios de índice/año
+  document.getElementById('indice-select').addEventListener('change', cargarCapa);
+  document.getElementById('year-select').addEventListener('change', cargarCapa);
+}
+
+// ── CARGA DE CAPA EE ──────────────────────────────────
+function cargarCapa() {
+  const indice = document.getElementById('indice-select').value;
+  const year   = document.getElementById('year-select').value;
+  setStatus(`Cargando ${indice.toUpperCase()} ${year}...`);
+  mostrarSpinner(true);
+
+  const col = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterDate(`${year}-01-01`, `${year}-12-31`)
+    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+    .median();
+
+  let imagen, visParams, legendTitle;
+
+  if (indice === 'ndvi') {
+    imagen = col.normalizedDifference(['B8', 'B4']).rename('NDVI');
+    visParams = { min: -0.2, max: 0.8, palette: ['d73027','fc8d59','fee08b','91cf60','1a9850'] };
+    legendTitle = 'NDVI — Vigor vegetativo';
+    actualizarLeyendaNDVI();
+  } else if (indice === 'ndwi') {
+    imagen = col.normalizedDifference(['B3', 'B8']).rename('NDWI');
+    visParams = { min: -0.5, max: 0.3, palette: ['d73027','fc8d59','fee08b','91cf60','1a9850'] };
+    legendTitle = 'NDWI — Humedad hídrica';
+    actualizarLeyendaNDWI();
+  } else {
+    imagen = col.select(['B4', 'B3', 'B2']);
+    visParams = { min: 0, max: 3000, gamma: 1.4 };
+    legendTitle = 'RGB — Color natural';
+    actualizarLeyendaRGB();
+  }
+
+  document.getElementById('legend-title').textContent = legendTitle;
+
+  imagen.getMap(visParams, mapId => {
+    if (eeLayer) mapa.overlayMapTypes.clear();
+    const tileSource = new ee.layers.EarthEngineTileSource(mapId);
+    eeLayer = new ee.layers.ImageOverlay(tileSource);
+    mapa.overlayMapTypes.push(eeLayer);
+    setStatus(`✅ ${indice.toUpperCase()} ${year} cargado`);
+    mostrarSpinner(false);
+  });
+}
+
+// ── ANÁLISIS DE POLÍGONO ──────────────────────────────
+function analizarPoligono() {
+  if (!poligono) return;
+
+  setStatus('Analizando zona seleccionada...');
+  mostrarSpinner(true);
+
+  const coords = poligono.getPath().getArray().map(p => [p.lng(), p.lat()]);
+  coords.push(coords[0]); // cerrar polígono
+  const region = ee.Geometry.Polygon([coords]);
+
+  const year = document.getElementById('year-select').value;
+  const col  = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterDate(`${year}-01-01`, `${year}-12-31`)
+    .filterBounds(region)
+    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+    .median();
+
+  const ndvi = col.normalizedDifference(['B8', 'B4']).rename('ndvi');
+  const ndwi = col.normalizedDifference(['B3', 'B8']).rename('ndwi');
+  const imagen = ndvi.addBands(ndwi);
+
+  imagen.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: region,
+    scale: 10,
+    maxPixels: 1e9
+  }).evaluate(resultado => {
+    mostrarSpinner(false);
+    if (!resultado) {
+      setStatus('⚠️ No se pudieron obtener estadísticas');
+      return;
+    }
+
+    const ndviVal = resultado.ndvi ? resultado.ndvi.toFixed(3) : 'N/A';
+    const ndwiVal = resultado.ndwi ? resultado.ndwi.toFixed(3) : 'N/A';
+    const ndviScore = resultado.ndvi || 0;
+
+    let diagnostico, color;
+    if (ndviScore > 0.5) {
+      diagnostico = '🟢 Excelente — Zona óptima para invernadero';
+      color = '#4db876';
+    } else if (ndviScore > 0.3) {
+      diagnostico = '🟡 Buena — Zona apta con manejo';
+      color = '#e8a020';
+    } else if (ndviScore > 0.1) {
+      diagnostico = '🟠 Regular — Requiere mejoras de suelo';
+      color = '#fc8d59';
+    } else {
+      diagnostico = '🔴 Baja aptitud — No recomendado';
+      color = '#e05252';
+    }
+
+    document.getElementById('stats-content').innerHTML = `
+      <div class="stat-row">
+        <span class="stat-label">NDVI promedio</span>
+        <span class="stat-value">${ndviVal}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">NDWI promedio</span>
+        <span class="stat-value">${ndwiVal}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Año analizado</span>
+        <span class="stat-value">${year}</span>
+      </div>
+      <div style="margin-top:10px;padding:8px;background:rgba(0,0,0,0.3);border-radius:8px;border-left:3px solid ${color}">
+        <div style="font-size:12px;font-weight:700;color:${color}">${diagnostico}</div>
+      </div>
+    `;
+
+    document.getElementById('info-panel').style.display = 'block';
+    setStatus('✅ Análisis completado');
+  });
+}
+
+// ── HELPERS ───────────────────────────────────────────
+function activarDibujo() {
+  drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+  document.getElementById('btn-draw').classList.add('active');
+  setStatus('Dibujá un polígono sobre el terreno a analizar');
+}
+
+function limpiarPoligono() {
+  if (poligono) { poligono.setMap(null); poligono = null; }
+  document.getElementById('info-panel').style.display = 'none';
+  document.getElementById('btn-analizar').disabled = true;
+  document.getElementById('btn-limpiar').disabled = true;
+  setStatus('Polígono eliminado');
+}
+
+function setStatus(msg) {
+  document.getElementById('status-pill').textContent = msg;
+}
+
+function mostrarSpinner(show) {
+  document.getElementById('spinner').style.display = show ? 'inline-block' : 'none';
+}
+
+function actualizarLeyendaNDVI() {
+  document.querySelector('#legend').innerHTML = `
+    <h4 id="legend-title">NDVI — Vigor vegetativo</h4>
+    <div class="legend-row"><div class="legend-color" style="background:#d73027"></div><span>&lt; 0 — Sin vegetación</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fc8d59"></div><span>0–0.2 — Escasa</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fee08b"></div><span>0.2–0.4 — Moderada</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#91cf60"></div><span>0.4–0.6 — Buena</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#1a9850"></div><span>&gt; 0.6 — Densa</span></div>
+  `;
+}
+
+function actualizarLeyendaNDWI() {
+  document.querySelector('#legend').innerHTML = `
+    <h4 id="legend-title">NDWI — Humedad hídrica</h4>
+    <div class="legend-row"><div class="legend-color" style="background:#d73027"></div><span>&lt; -0.3 — Muy seco</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fc8d59"></div><span>-0.3–0 — Seco</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#fee08b"></div><span>0–0.1 — Moderado</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#91cf60"></div><span>0.1–0.2 — Húmedo</span></div>
+    <div class="legend-row"><div class="legend-color" style="background:#1a9850"></div><span>&gt; 0.2 — Muy húmedo</span></div>
+  `;
+}
+
+function actualizarLeyendaRGB() {
+  document.querySelector('#legend').innerHTML = `
+    <h4 id="legend-title">RGB — Color natural</h4>
+    <div style="font-size:12px;color:#7a9e87">Vista de color real Sentinel-2<br>Bandas B4 (Rojo), B3 (Verde), B2 (Azul)</div>
+  `;
+}
+</script>
+</body>
+</html>
