@@ -287,22 +287,9 @@ function iniciarSesion() {
   });
 }
 
-ee.data.authenticateViaOauth(
-  CLIENT_ID,
-  () => {
-    ee.initialize(null, null, arrancarApp, err => {
-      console.error('EE init error:', err);
-      setStatus('Error de inicialización');
-    }, null, PROJECT);
-  },
-  err => {
-    console.log('No autenticado, mostrando botón');
-    setStatus('Requiere autenticación');
-  },
-  ['https://www.googleapis.com/auth/earthengine.readonly'],
-  () => { /* mostrar overlay — ya está visible */ },
-  true
-);
+// Con Client IDs nuevos usar solo authenticateViaPopup
+setStatus('Requiere autenticación');
+// El overlay ya está visible, el usuario debe hacer clic en el botón
 
 // ── APP ───────────────────────────────────────────────
 function arrancarApp() {
